@@ -111,8 +111,8 @@ spec:
             - name: PRIMARY_INTERFACE
               value: {{ . | quote }}
             {{- end }}
-          # The wrapper considers a bounded, intentional snapshot pause healthy
-          # so a native backup does not restart the pod.
+          # With the backup helper, health is reported through the supervisor's
+          # control socket so the probe also proves the socket works.
           {{- $healthCommand := list "/usr/local/bin/healthcheck.sh" }}
           {{- if .Values.matterServer.backup.enabled }}
           {{- $healthCommand = list "curl" "--fail" "--silent" "--max-time" "5" "--output" "/dev/null" "--unix-socket" "/run/kube4ha-matter/control.sock" "http://localhost/health" }}

@@ -98,19 +98,21 @@ onboarding, add **kube4ha Matter Backup** under Settings → Devices & services.
 
 Before each native backup, the integration contacts the Matter supervisor over
 a Unix socket in a node-local directory shared only between the Home Assistant
-and Matter pods (`matterServer.backup.controlPath`). The supervisor gracefully stops
-Matter, waits for storage to flush, validates a compressed archive of the entire
-server directory, and atomically replaces:
+and Matter pods (`matterServer.backup.controlPath`). The supervisor copies the
+running server's storage tree, validates a compressed archive of that copy,
+and atomically replaces:
 
 ```text
 /config/.kube4ha/matter/latest.tar.gz
 ```
 
-The archive records its format, Matter image, and creation time. Matter restarts
-even if snapshot creation fails; devices reconnect while Home Assistant remains
-available. Closing WebSocket clients can take about 30 seconds; the supervisor
-allows up to 60 seconds for a graceful shutdown and storage flush. A failed
-graceful stop, forced kill, or invalid snapshot
+The archive records its format, Matter image, and creation time. Matter keeps
+running throughout, so paired devices keep their sessions and no reconnection
+follows a backup. The copy is consistent because matter.js stores state as an
+append-only write-ahead log plus a snapshot that is replaced atomically: the
+supervisor copies every log segment before the snapshot, skips the lock, PID,
+and temporary files, and the server ignores commits already covered by a newer
+snapshot as well as a torn final log line. An invalid or incomplete archive
 fails the native backup and preserves the previous archive. Check failures in
 Home Assistant's backup settings.
 

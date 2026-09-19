@@ -136,8 +136,8 @@ and requirements.
 
 ## Backups and recovery
 
-Before each native backup, kube4ha briefly stops the Matter process and stages
-its fabric state inside Home Assistant's configuration. The same backup then
+Before each native backup, kube4ha copies the running Matter server's fabric
+state into Home Assistant's configuration without stopping it. The same backup then
 protects Matter pairings, and normal recovery restores an empty Matter volume
 automatically. See [Matter backups](BACKUP.md#matter-data-in-native-backups).
 

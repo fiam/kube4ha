@@ -67,7 +67,7 @@ change in any Home Assistant release, including a patch release.
 | Restore mode | Starting with only `default_config:` exposes Home Assistant's native onboarding backup upload flow and a restored `/config` takes over | A release may require different bootstrap configuration or restore steps. |
 | Custom integration files | A user-selected integration remains compatible with the pinned Home Assistant image and can run from its chart-managed directory on the writable configuration volume | Home Assistant can reject or fail to load the integration even though artifact verification and installation succeeded. |
 | `files/kube4ha_matter_backup/backup.py` | The documented pre/post-backup platform runs before configuration archiving and propagates snapshot failures | Backups may omit current Matter state or incorrectly succeed with stale state. |
-| `files/matter/supervisor.mjs` and `initialize.py` | The pinned Matter entrypoint exits cleanly on SIGTERM, flushes its complete `/data/server` tree, and can reopen that state after restoration | A snapshot could be inconsistent or a restored fabric could fail to load. |
+| `files/matter/supervisor.mjs` and `initialize.py` | The pinned matter.js storage keeps key/value state as an append-only WAL (`wal/*.jsonl`, compressed once rotated) plus a `snapshot.json.gz` replaced by rename, never deletes segments while running, skips replayed commits already covered by a newer snapshot, tolerates a torn final log line, and reopens a copied tree without `matter.lock` or `matter.pid` | A live snapshot could be inconsistent or a restored fabric could fail to load. |
 | `templates/matter-deployment.yaml` | The Matter integration reconnects to `ws://127.0.0.1:<port>/ws` on its own after the separate Matter pod restarts, and tolerates the server being absent while Home Assistant starts | The integration could stay failed after a controller restart or block Home Assistant startup. |
 | `templates/zigbee2mqtt-backup-cronjob.yaml` | Home Assistant continues archiving non-excluded files beneath `/config`, including the staged Zigbee2MQTT ZIP | A native backup may omit the Zigbee2MQTT recovery snapshot even though the CronJob succeeds. |
 
@@ -362,3 +362,25 @@ reconnect behavior was audited in the pinned source: setup raises
 `ConfigEntryNotReady` while the server is unreachable, and the entry reloads
 itself when the client's listener disconnects. Production verification of the
 migration is recorded in the private deployment repository.
+
+## Online Matter snapshots (2026-09-19)
+
+The pre-backup snapshot no longer stops the controller. The audit of the
+pinned image (matter.js 0.17.9, `@matter/general` WAL storage) confirmed the
+storage contract recorded above: `WalWriter` only appends to the newest
+segment with `fsync`, rotated segments are compressed through a `.tmp` name and
+then removed, `WalSnapshot.save` writes `snapshot.tmp.json.gz` and renames it,
+and segment deletion runs only on close. `WalReader` skips malformed lines with
+a warning and `WalStorageDriver` replays only commits after the loaded
+snapshot's commit ID. The supervisor therefore copies subdirectories before
+files, so `wal/` precedes `snapshot.json.gz`, excludes `matter.lock`,
+`matter.pid`, and `*.tmp*`, retries the copy if a segment vanishes between
+listing and copying, and archives the copy. The stale-lock handling in
+`lock-utils.js` would also tolerate an included lock, but the copy omits it.
+
+Verified with `task check`: the supervisor test suite exercises a live
+snapshot with the child never receiving `SIGTERM`, rejection of concurrent
+requests, failure preserving the previous archive while Matter keeps running,
+transient-file exclusion, and graceful shutdown. Restoring an online snapshot
+into an empty volume has not yet been exercised on the production LAN; record
+that test in the private deployment repository when it happens.

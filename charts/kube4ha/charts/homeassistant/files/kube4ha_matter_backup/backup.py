@@ -14,8 +14,8 @@ async def async_pre_backup(hass: HomeAssistant) -> None:
     # claim to protect current pairings using a previous, potentially stale archive.
     try:
         connector = aiohttp.UnixConnector(path="/run/kube4ha-matter/control.sock")
-        # Allow 60s for WebSocket shutdown/storage flush and two 30s archive
-        # operations, plus HTTP/IPC overhead.
+        # The supervisor copies the live storage tree, then runs two 30s
+        # archive operations; allow generous HTTP/IPC overhead on top.
         async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=150)) as session:
             async with session.post("http://localhost/snapshot") as response:
                 response.raise_for_status()
@@ -27,6 +27,6 @@ async def async_pre_backup(hass: HomeAssistant) -> None:
 
 
 async def async_post_backup(hass: HomeAssistant) -> None:
-    # The supervisor restarts Matter in a finally block before acknowledging
-    # the snapshot, including when the caller disconnects or a backup fails.
+    # The snapshot is taken from the running controller, so nothing needs to
+    # be restarted or cleaned up after the backup.
     return

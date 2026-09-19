@@ -1,8 +1,9 @@
-// Own the Matter process so a native HA backup can take a cold, atomic snapshot.
-// The control socket is shared only with the HA container; no network API is added.
+// Own the Matter process so a native HA backup can stage a consistent snapshot
+// without stopping the controller. The control socket lives in a node-local
+// directory shared only with the HA pod; no network API is added.
 import { spawn, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmod, mkdtemp, open, readdir, lstat, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, open, readdir, lstat, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
@@ -10,25 +11,65 @@ import { realpathSync } from 'node:fs';
 
 const run = promisify(execFile);
 
-async function checkTree(path) {
-  for (const name of await readdir(path)) {
-    const child = join(path, name);
-    const stat = await lstat(child);
-    if (stat.isDirectory()) await checkTree(child);
-    else if (!stat.isFile()) throw new Error('Matter data contains a non-regular file');
+// Runtime-only files. The lock and PID belong to the live process, and the
+// storage drivers write every replaced file through a temporary name first.
+function transient(name) {
+  return name === 'matter.lock' || name === 'matter.pid' || /\.tmp(\.|$)/.test(name);
+}
+
+// Copy the storage tree while Matter keeps writing to it.
+//
+// matter.js persists key/value state as an append-only write-ahead log plus a
+// snapshot that is replaced atomically by rename. While the server runs it
+// never deletes log segments, only appends to the newest one and compresses
+// rotated ones. Copying every log segment before the snapshot therefore yields
+// a state the server can load: commits already covered by a newer snapshot are
+// skipped on replay, and a torn final line is ignored with a warning.
+// Subdirectories are copied before files so `wal/` precedes `snapshot.json.gz`.
+async function copyTree(source, target) {
+  await mkdir(target, { recursive: true });
+  const entries = await readdir(source);
+  const kinds = await Promise.all(entries.map(async name => {
+    const stat = await lstat(join(source, name));
+    if (stat.isDirectory()) return 'dir';
+    if (stat.isFile()) return 'file';
+    throw new Error('Matter data contains a non-regular file');
+  }));
+  const named = entries.map((name, index) => ({ name, kind: kinds[index] }));
+  for (const { name } of named.filter(e => e.kind === 'dir').sort((a, b) => a.name.localeCompare(b.name))) {
+    await copyTree(join(source, name), join(target, name));
+  }
+  for (const { name } of named.filter(e => e.kind === 'file' && !transient(e.name)).sort((a, b) => a.name.localeCompare(b.name))) {
+    await copyFile(join(source, name), join(target, name));
+  }
+}
+
+// A rotated log segment can be compressed and removed between listing and
+// copying. That window is tiny; retrying the whole copy makes it harmless.
+export async function copyState(source, target, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await copyTree(source, target);
+      return;
+    } catch (error) {
+      await rm(target, { recursive: true, force: true });
+      if (error.code !== 'ENOENT' || attempt >= attempts) throw error;
+    }
   }
 }
 
 export async function archiveState({ storage, backup, image }) {
-  await checkTree(join(storage, 'server'));
-  if (!(await readdir(join(storage, 'server'))).length) throw new Error('Matter data is empty');
+  const source = join(storage, 'server');
+  if (!(await readdir(source)).length) throw new Error('Matter data is empty');
   const work = await mkdtemp(join(backup, '.snapshot-'));
   try {
+    await copyState(source, join(work, 'server'));
+    if (!(await readdir(join(work, 'server'))).length) throw new Error('Matter data is empty');
     await writeFile(join(work, 'metadata.json'), JSON.stringify({
       format: 1, server_image: image, created_at: new Date().toISOString(),
     }), { mode: 0o600 });
     const archive = join(work, 'latest.tar.gz');
-    await run('tar', ['-czf', archive, '-C', storage, 'server', '-C', work, 'metadata.json'], { timeout: 30000 });
+    await run('tar', ['-czf', archive, '-C', work, 'server', 'metadata.json'], { timeout: 30000 });
     await run('tar', ['-tzf', archive], { timeout: 30000 });
     await chmod(archive, 0o600);
     const file = await open(archive, 'r');
@@ -94,23 +135,16 @@ export function supervise({ command, storage, backup, socket, image, port, stopT
       response.end(JSON.stringify(body));
     };
     if (request.method === 'GET' && request.url === '/health') {
-      // An intentional stop for backup must not remove HA from its Service.
-      reply(!closing && (snapshot || await healthy()) ? 200 : 503, {});
+      reply(!closing && await healthy() ? 200 : 503, {});
       return;
     }
     if (request.method !== 'POST' || request.url !== '/snapshot') { reply(404, {}); return; }
     if (closing || snapshot) { reply(409, { error: 'Matter snapshot already in progress' }); return; }
-    // Claim the operation before any await so concurrent requests cannot stop
-    // the same process twice. Continue even if the HTTP client disconnects.
+    // Claim the operation before any await so concurrent requests are
+    // rejected. Continue even if the HTTP client disconnects.
     snapshot = (async () => {
       if (!await healthy()) throw new Error('Matter is not ready');
-      try {
-        await stop();
-        if (closing) throw new Error('Matter is shutting down');
-        await archiveState({ storage, backup, image });
-      } finally {
-        if (!child) start();
-      }
+      await archiveState({ storage, backup, image });
     })();
     try {
       await snapshot;

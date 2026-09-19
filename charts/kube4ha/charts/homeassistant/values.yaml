@@ -95,7 +95,8 @@ matterServer:
   primaryInterface: ""
   backup:
     # Bundle the kube4ha_matter_backup integration and stage a fresh snapshot
-    # before every native HA backup. Matter briefly reconnects; HA stays up.
+    # before every native HA backup. The live storage tree is copied without
+    # stopping Matter, so paired devices keep their sessions.
     # Restore mode stops Matter automatically. Resuming seed mode restores a
     # snapshot into an empty Matter claim and never overwrites existing data.
     enabled: true

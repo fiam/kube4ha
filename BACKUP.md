@@ -97,7 +97,8 @@ Seed-mode onboarding creates its config entry automatically. For manual
 onboarding, add **kube4ha Matter Backup** under Settings → Devices & services.
 
 Before each native backup, the integration contacts the Matter supervisor over
-a Unix socket shared between the containers. The supervisor gracefully stops
+a Unix socket in a node-local directory shared only between the Home Assistant
+and Matter pods (`matterServer.backup.controlPath`). The supervisor gracefully stops
 Matter, waits for storage to flush, validates a compressed archive of the entire
 server directory, and atomically replaces:
 

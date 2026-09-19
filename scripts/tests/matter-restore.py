@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import socket
 import sys
 import tarfile
 import tempfile
@@ -64,6 +65,36 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises((EOFError, OSError, tarfile.TarError)):
             module.restore(self.storage, self.archive, IMAGE)
         self.assertFalse((self.storage / "server").exists())
+
+
+class PortReleaseTests(unittest.TestCase):
+    """A replacement controller waits for the previous one instead of crash-looping."""
+
+    def test_waits_until_previous_controller_exits(self):
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(listener.close)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(8)
+        port = listener.getsockname()[1]
+        polls = []
+
+        def release(_interval):
+            polls.append(True)
+            if len(polls) == 2:
+                listener.close()
+
+        messages = []
+        module.wait_for_port(port, interval=0, log=messages.append, sleep=release)
+        self.assertEqual(len(polls), 2)
+        self.assertEqual(len(messages), 2)
+        self.assertIn(str(port), messages[0])
+
+    def test_free_port_does_not_wait(self):
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+        module.wait_for_port(port, sleep=lambda _interval: self.fail("must not sleep"), log=lambda _m: self.fail("must not log"))
 
 
 if __name__ == "__main__":

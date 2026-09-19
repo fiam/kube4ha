@@ -13,6 +13,13 @@ Name the CronJob that stages Zigbee2MQTT data for Home Assistant backups.
 {{- end }}
 
 {{/*
+Name the Deployment that runs the Matter controller beside Home Assistant.
+*/}}
+{{- define "homeassistant.matterName" -}}
+{{- printf "%s-matter" (include "homeassistant.fullname" . | trunc 56 | trimSuffix "-") }}
+{{- end }}
+
+{{/*
 Name a repository-local or remotely fetched custom component volume.
 */}}
 {{- define "homeassistant.customComponentName" -}}

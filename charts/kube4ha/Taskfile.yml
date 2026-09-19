@@ -85,6 +85,39 @@ tasks:
         printf '%s\n' "$matter_render" | grep -Fq 'name: KUBE4HA_MATTER_BACKUP_ENABLED'
         printf '%s\n' "$matter_render" | grep -Fq 'name: matter-backup-install'
         printf '%s\n' "$matter_render" | grep -Fq 'name: matter-state-initialize'
+        # Matter runs in its own Deployment so Home Assistant rollouts never
+        # restart the controller. Both pods share the node's network namespace
+        # and the control socket directory.
+        matter_deployment="$(helm template matter-test charts/homeassistant \
+          --show-only templates/matter-deployment.yaml)"
+        printf '%s\n' "$matter_deployment" | grep -Fq 'name: matter-test-homeassistant-matter'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'app.kubernetes.io/component: matter-server'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'hostNetwork: true'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'automountServiceAccountToken: false'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'type: Recreate'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'terminationGracePeriodSeconds: 180'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'requiredDuringSchedulingIgnoredDuringExecution:'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'topologyKey: kubernetes.io/hostname'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'path: "/run/kube4ha-matter"'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'name: matter-state-initialize'
+        printf '%s\n' "$matter_deployment" | grep -Fq 'name: matter-server'
+        ha_deployment="$(helm template matter-test charts/homeassistant \
+          --show-only templates/deployment.yaml)"
+        if printf '%s\n' "$ha_deployment" | grep -Eq 'name: matter-server|name: matter-state-initialize|name: matter-data|name: matter-runtime|matter.revision'; then
+          echo 'the Matter controller must not run inside the Home Assistant pod' >&2
+          exit 1
+        fi
+        printf '%s\n' "$ha_deployment" | grep -Fq 'name: matter-backup-install'
+        printf '%s\n' "$ha_deployment" | grep -Fq 'path: "/run/kube4ha-matter"'
+        printf '%s\n' "$ha_deployment" | grep -Fq 'mountPath: /run/kube4ha-matter'
+        # Only Home Assistant pods back the HTTP Service.
+        helm template matter-test charts/homeassistant --show-only templates/service.yaml |
+          grep -Fq 'app.kubernetes.io/component: server'
+        if helm template matter-test charts/homeassistant \
+          --set matterServer.backup.controlPath=relative >/dev/null 2>&1; then
+          echo 'relative Matter control paths must fail rendering' >&2
+          exit 1
+        fi
         # A separate claim must not be mounted under HA's /config, which is
         # replaced during native restoration.
         if printf '%s\n' "$matter_render" | grep -q 'mountPath: /config/'; then
@@ -95,8 +128,8 @@ tasks:
           --set onboarding.enabled=true \
           --set onboarding.existingSecret.name=test-owner \
           --set matterServer.enabled=false)"
-        if printf '%s\n' "$disabled_render" | grep -Eq 'name: matter-server|matter-pvc|name: MATTER_SERVER_URL|name: matter-data-permissions'; then
-          echo 'disabled Matter must not render its container, claim, init container, or bootstrap URL' >&2
+        if printf '%s\n' "$disabled_render" | grep -Eq 'name: matter-server|matter-pvc|name: MATTER_SERVER_URL|name: matter-data-permissions|component: matter-server'; then
+          echo 'disabled Matter must not render its Deployment, claim, init container, or bootstrap URL' >&2
           exit 1
         fi
         custom_render="$(helm template matter-test charts/homeassistant \
@@ -119,14 +152,14 @@ tasks:
           fi
         done
         restore_matter="$(helm template matter-test charts/homeassistant --set configSeed.mode=restore)"
-        if printf '%s\n' "$restore_matter" | grep -Eq 'name: matter-server|name: matter-state-initialize|kind: Job|matter-test-homeassistant-matter-pvc'; then
+        if printf '%s\n' "$restore_matter" | grep -Eq 'name: matter-server|name: matter-state-initialize|kind: Job|matter-test-homeassistant-matter-pvc|component: matter-server'; then
           echo 'restore mode must not start Matter or provision a new fabric before HA recovery' >&2
           exit 1
         fi
         no_backup="$(helm template matter-test charts/homeassistant --set matterServer.backup.enabled=false)"
         printf '%s\n' "$no_backup" | grep -Fq 'name: matter-server'
-        if printf '%s\n' "$no_backup" | grep -q 'name: matter-backup-install'; then
-          echo 'disabling Matter backup must disable its integration installer' >&2
+        if printf '%s\n' "$no_backup" | grep -Eq 'name: matter-backup-install|name: matter-control|supervisor.mjs"\]'; then
+          echo 'disabling Matter backup must disable its integration installer, control socket, and supervisor' >&2
           exit 1
         fi
       - |

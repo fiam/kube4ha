@@ -74,12 +74,14 @@ onboarding:
     languageKey: language
   resources: {}
 
-# Run the pinned OHF Matter Server beside Home Assistant on the host network.
+# Run the pinned OHF Matter Server in its own pod on the host network, pinned
+# to Home Assistant's node. Home Assistant rollouts therefore never restart the
+# controller or force paired devices through a new session handshake.
 # Seed-mode onboarding creates a missing Matter entry pointing at loopback;
 # existing entries (including external servers) are preserved. Pair devices
 # using the Companion app. Thread devices also need a Thread border router.
 # Its live fabric keys live on a separate retained PVC. A pre-backup hook
-# stages a cold snapshot inside HA's configuration for native backups.
+# stages a snapshot inside HA's configuration for native backups.
 # See DEPLOYMENT.md for host networking and BACKUP.md for recovery.
 matterServer:
   enabled: true
@@ -97,6 +99,10 @@ matterServer:
     # Restore mode stops Matter automatically. Resuming seed mode restores a
     # snapshot into an empty Matter claim and never overwrites existing data.
     enabled: true
+    # Node-local directory holding the supervisor's control socket. It is
+    # shared only between the Home Assistant and Matter pods on that node and
+    # is owned by the Matter user with mode 0700.
+    controlPath: /run/kube4ha-matter
   persistence:
     # Empty creates <homeassistant-fullname>-matter-pvc, retained on uninstall
     # or disable. An existing claim must be writable by UID/GID 1000.
@@ -104,6 +110,7 @@ matterServer:
     size: 1Gi
     # Empty inherits config.volume.storageClass (then the cluster default).
     storageClass: ""
+  podAnnotations: {}
   resources: {}
 
 # Create Home Assistant's official Cloudflare R2 backup integration through its

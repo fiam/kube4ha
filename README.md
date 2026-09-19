@@ -125,8 +125,10 @@ configuration.
 
 ## Matter devices
 
-Matter Server is enabled by default alongside Home Assistant. Seed-mode
-deployments automatically add a missing Matter integration. Its URL is
+Matter Server is enabled by default in its own pod beside Home Assistant, so
+Home Assistant rollouts never restart the controller or force paired devices
+through a new session handshake. Seed-mode deployments automatically add a
+missing Matter integration. Its URL is
 `ws://127.0.0.1:5580/ws`; use the Home Assistant Companion app to pair devices.
 Thread devices additionally require a Thread border router and working LAN
 IPv6/multicast. See [Matter setup](DEPLOYMENT.md#matter-devices) for configuration

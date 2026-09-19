@@ -97,8 +97,14 @@ with an explicit message while both are present.
 
 The chart runs the Open Home Foundation
 [`matterjs-server` 1.4.0](https://github.com/matter-js/matterjs-server/releases/tag/v1.4.0)
-alongside Home Assistant by default. Both containers share the host network;
-the control API binds only to `127.0.0.1:5580` and has no Service or public route.
+beside Home Assistant by default, in its own `<release>-homeassistant-matter`
+Deployment scheduled onto the Home Assistant pod's node. Both pods share the
+host network; the control API binds only to `127.0.0.1:5580` and has no Service
+or public route. Keeping the controller out of the Home Assistant pod means
+configuration changes, custom-integration updates, and Home Assistant upgrades
+never restart it. Every controller restart forces a new session handshake with
+each paired device, and battery-powered Thread devices can take minutes to
+hours to accept one again.
 Seed-mode onboarding adds a missing Matter integration through Home Assistant's
 private config flow and preserves existing entries, including external servers.
 
@@ -119,7 +125,7 @@ prove physical-device discovery or commissioning.
 
 Matter over Wi-Fi/Ethernet needs no server radio. Thread devices need a working
 Thread border router; Matter Server does not provide one. Pairing uses the
-phone app. The Matter container does not use host D-Bus, enable local Bluetooth,
+phone app. The Matter pod does not use host D-Bus, enable local Bluetooth,
 or repurpose a Zigbee adapter.
 
 Override defaults in your private `config/values.yaml` as needed:
@@ -141,12 +147,20 @@ homeassistant:
 
 `primaryInterface` selects device traffic without changing the loopback API.
 Changing the port also requires reconfiguring the existing Home Assistant entry;
-two releases on the same host cannot share listening ports. Matter requires one
-Home Assistant replica with autoscaling disabled. Only one server may write its
-fabric volume. Audit image upgrades against
+two releases on the same host cannot share listening ports or the backup
+control directory (`matterServer.backup.controlPath`, a node-local path shared
+only between the two pods). Matter requires one Home Assistant replica with
+autoscaling disabled. Only one server may write its fabric volume; a replacement
+pod waits for the previous controller to release the loopback port before it
+opens that volume. Audit image upgrades against
 [HOME_ASSISTANT_COMPATIBILITY.md](HOME_ASSISTANT_COMPATIBILITY.md).
 
-Setting `homeassistant.matterServer.enabled: false` removes the container while
+Upgrading from a chart that ran Matter as a sidecar restarts Home Assistant
+once and moves the controller into the new pod; the fabric claim, its data, and
+the Home Assistant entry are unchanged. Devices reconnect as they would after
+any other controller restart.
+
+Setting `homeassistant.matterServer.enabled: false` removes the Deployment while
 retaining its PVC and existing Home Assistant entry. Disable or remove the entry
 in Home Assistant if no longer needed. Re-enabling Matter reuses the retained
 claim; keep its name and storage settings stable. Native backups include Matter
@@ -156,8 +170,8 @@ Check readiness without printing fabric credentials:
 
 ```sh
 kubectl -n kube4ha get pods \
-  -l app.kubernetes.io/name=homeassistant,app.kubernetes.io/component=server
-kubectl -n kube4ha exec deployment/kube4ha-homeassistant -c matter-server -- \
+  -l app.kubernetes.io/name=homeassistant,app.kubernetes.io/component=matter-server
+kubectl -n kube4ha exec deployment/kube4ha-homeassistant-matter -c matter-server -- \
   /usr/local/bin/healthcheck.sh
 ```
 

@@ -68,6 +68,7 @@ change in any Home Assistant release, including a patch release.
 | Custom integration files | A user-selected integration remains compatible with the pinned Home Assistant image and can run from its chart-managed directory on the writable configuration volume | Home Assistant can reject or fail to load the integration even though artifact verification and installation succeeded. |
 | `files/kube4ha_matter_backup/backup.py` | The documented pre/post-backup platform runs before configuration archiving and propagates snapshot failures | Backups may omit current Matter state or incorrectly succeed with stale state. |
 | `files/matter/supervisor.mjs` and `initialize.py` | The pinned Matter entrypoint exits cleanly on SIGTERM, flushes its complete `/data/server` tree, and can reopen that state after restoration | A snapshot could be inconsistent or a restored fabric could fail to load. |
+| `templates/matter-deployment.yaml` | The Matter integration reconnects to `ws://127.0.0.1:<port>/ws` on its own after the separate Matter pod restarts, and tolerates the server being absent while Home Assistant starts | The integration could stay failed after a controller restart or block Home Assistant startup. |
 | `templates/zigbee2mqtt-backup-cronjob.yaml` | Home Assistant continues archiving non-excluded files beneath `/config`, including the staged Zigbee2MQTT ZIP | A native backup may omit the Zigbee2MQTT recovery snapshot even though the CronJob succeeds. |
 
 The chart does not write private `.storage` files. In seed mode, the
@@ -331,3 +332,33 @@ cold snapshot. See [BACKUP.md](BACKUP.md#restore-onto-a-new-cluster) for recover
 Physical device commissioning, Thread routes, and device reconnection are
 not verified by this Kind test. They require testing on the production LAN;
 the Colima/Kind bridge and VM topology does not establish those capabilities.
+
+## Matter isolation (2026-09-19)
+
+Home Assistant stays pinned to `2026.9.0` and the Matter image to `1.4.0`. The
+controller moved from a sidecar into its own `<release>-homeassistant-matter`
+Deployment after a production incident: eleven Home Assistant rollouts in one
+day, each restarting the sidecar, drove a Thread door lock from 30-second
+reconnects to a Matter stack that stopped answering session handshakes while
+its Thread and IP layers stayed reachable. The Matter server logged
+`peer-unresponsive` on every CASE attempt; the recorder history showed each
+outage matching a rollout and recovery times growing with each restart.
+
+The new pod keeps host networking, the loopback bind, UID/GID 1000, the
+retained fabric claim, and the supervisor. It is pinned to Home Assistant's
+node by a required pod affinity because it mounts the ReadWriteOnce
+configuration claim for snapshots, and the control socket moved from a pod
+`emptyDir` to a node-local `hostPath` directory (mode 0700, owned by the Matter
+user) so the Home Assistant container can still reach the supervisor. The
+initializer now waits for a previous controller to release the loopback port
+before opening the fabric volume, which covers the one-time migration from the
+sidecar while the old Home Assistant pod is still terminating.
+
+Verified with `task check`: default, disabled, restore, and backup-disabled
+renderings; the Home Assistant Deployment no longer carries the Matter
+container, initializer, volumes, or rollout annotation; the Service selects
+only Home Assistant pods; the initializer's port wait. The Matter integration's
+reconnect behavior was audited in the pinned source: setup raises
+`ConfigEntryNotReady` while the server is unreachable, and the entry reloads
+itself when the client's listener disconnects. Production verification of the
+migration is recorded in the private deployment repository.

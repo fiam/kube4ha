@@ -67,7 +67,6 @@ spec:
     metadata:
       annotations:
         configmap.revision: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        matter.revision: {{ include (print $.Template.BasePath "/matter-runtime.yaml") . | sha256sum }}
         {{- if or .Values.customComponents.local .Values.customComponents.remote }}
         custom-components.revision: {{ printf "%s\n%s" (include (print $.Template.BasePath "/custom-components-configmaps.yaml") .) (toJson .Values.customComponents.remote) | sha256sum }}
         {{- end }}
@@ -93,9 +92,6 @@ spec:
       {{- end }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      {{- if $matterRunning }}
-      terminationGracePeriodSeconds: 180
-      {{- end }}
       initContainers:
         {{- if .Values.matterServer.backup.enabled }}
         - name: matter-backup-install
@@ -118,32 +114,6 @@ spec:
             - name: matter-backup-integration
               mountPath: /source
               readOnly: true
-        {{- end }}
-        {{- if $matterRunning }}
-        - name: matter-state-initialize
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
-          command: ["python3", "/opt/kube4ha-matter/initialize.py"]
-          env:
-            - name: MATTER_SERVER_IMAGE
-              value: "{{ .Values.matterServer.image.repository }}:{{ .Values.matterServer.image.tag }}"
-            - name: MATTER_BACKUP_ENABLED
-              value: {{ .Values.matterServer.backup.enabled | quote }}
-          volumeMounts:
-            - name: matter-data
-              mountPath: /data
-            - name: config
-              mountPath: /config
-            - name: matter-runtime
-              mountPath: /opt/kube4ha-matter
-              readOnly: true
-            {{- if .Values.matterServer.backup.enabled }}
-            - name: matter-control
-              mountPath: /run/kube4ha-matter
-            {{- end }}
         {{- end }}
         {{- if .Values.configSeed.enabled }}
         - name: config-seed
@@ -432,89 +402,19 @@ spec:
             {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-        {{- if $matterRunning }}
-        - name: matter-server
-          image: "{{ .Values.matterServer.image.repository }}:{{ .Values.matterServer.image.tag }}"
-          imagePullPolicy: {{ .Values.matterServer.image.pullPolicy }}
-          {{- if .Values.matterServer.backup.enabled }}
-          command: ["node", "/opt/kube4ha-matter/supervisor.mjs"]
-          {{- end }}
-          securityContext:
-            runAsUser: 1000
-            runAsGroup: 1000
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-          env:
-            - name: MATTER_SERVER_IMAGE
-              value: "{{ .Values.matterServer.image.repository }}:{{ .Values.matterServer.image.tag }}"
-            - name: STORAGE_PATH
-              value: /data/server
-            - name: LISTEN_ADDRESS
-              value: "127.0.0.1"
-            - name: PORT
-              value: {{ .Values.matterServer.port | quote }}
-            {{- with .Values.matterServer.primaryInterface }}
-            - name: PRIMARY_INTERFACE
-              value: {{ . | quote }}
-            {{- end }}
-          # The wrapper considers a bounded, intentional snapshot pause healthy
-          # so the HA Service remains available during native backup creation.
-          {{- $healthCommand := list "/usr/local/bin/healthcheck.sh" }}
-          {{- if .Values.matterServer.backup.enabled }}
-          {{- $healthCommand = list "curl" "--fail" "--silent" "--max-time" "5" "--output" "/dev/null" "--unix-socket" "/run/kube4ha-matter/control.sock" "http://localhost/health" }}
-          {{- end }}
-          startupProbe:
-            exec:
-              command: {{ $healthCommand | toJson }}
-            periodSeconds: 5
-            timeoutSeconds: 10
-            failureThreshold: 120
-          readinessProbe:
-            exec:
-              command: {{ $healthCommand | toJson }}
-            periodSeconds: 10
-            timeoutSeconds: 10
-          livenessProbe:
-            exec:
-              command: {{ $healthCommand | toJson }}
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 3
-          {{- with .Values.matterServer.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          volumeMounts:
-            - name: matter-data
-              mountPath: /data
-            {{- if .Values.matterServer.backup.enabled }}
-            - name: matter-runtime
-              mountPath: /opt/kube4ha-matter
-              readOnly: true
-            - name: matter-control
-              mountPath: /run/kube4ha-matter
-            - name: config
-              mountPath: /backup
-              subPath: .kube4ha/matter
-            {{- end }}
-        {{- end }}
       volumes:
         {{- if .Values.matterServer.backup.enabled }}
         - name: matter-backup-integration
           configMap:
             name: {{ include "homeassistant.fullname" . }}-matter-backup-integration
         {{- end }}
-        {{- if $matterRunning }}
-        - name: matter-runtime
-          configMap:
-            name: {{ include "homeassistant.fullname" . }}-matter-runtime
-        {{- if .Values.matterServer.backup.enabled }}
+        {{- if and $matterRunning .Values.matterServer.backup.enabled }}
+        # Shared with the Matter pod on the same node; the HA container talks
+        # to the supervisor's Unix socket here before each native backup.
         - name: matter-control
-          emptyDir: {}
-        {{- end }}
-        - name: matter-data
-          persistentVolumeClaim:
-            claimName: {{ .Values.matterServer.persistence.existingClaim | default (printf "%s-matter-pvc" (include "homeassistant.fullname" .)) }}
+          hostPath:
+            path: {{ .Values.matterServer.backup.controlPath | quote }}
+            type: DirectoryOrCreate
         {{- end }}
         - name: config
           persistentVolumeClaim:

@@ -3,8 +3,10 @@ import json
 import gzip
 import os
 from pathlib import Path, PurePosixPath
+import socket
 import tarfile
 import tempfile
+import time
 
 
 def restore(storage: Path, archive: Path, image: str) -> bool:
@@ -46,8 +48,33 @@ def restore(storage: Path, archive: Path, image: str) -> bool:
     return True
 
 
+def port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(1)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def wait_for_port(port: int, interval: float = 2.0, log=print, sleep=time.sleep) -> None:
+    """Block until nothing listens on the loopback port.
+
+    Matter shares the node's network namespace with Home Assistant, and only one
+    controller may own the fabric storage. During a migration from the former
+    sidecar, or while a previous pod is still shutting down, wait rather than
+    crash-loop against the port and the storage lock.
+    """
+    waited = False
+    while port_in_use(port):
+        if not waited:
+            log(f"Waiting for the previous Matter controller to release port {port}")
+            waited = True
+        sleep(interval)
+    if waited:
+        log(f"Port {port} is free")
+
+
 def main():
     storage = Path("/data")
+    wait_for_port(int(os.environ.get("PORT", "5580")), log=lambda m: print(m, flush=True))
     backup = Path("/config/.kube4ha/matter")
     if os.environ.get("MATTER_BACKUP_ENABLED") == "true":
         if restore(storage, backup / "latest.tar.gz", os.environ["MATTER_SERVER_IMAGE"]):

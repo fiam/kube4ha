@@ -318,6 +318,23 @@ hostDbus:
   enabled: true
   path: /run/dbus
 
+# Optional Wi-Fi listing API for integrations. A separate workload exposes only
+# Scan/ListNetworks on host D-Bus, forwarding to existing wpa_supplicant control
+# sockets. It never configures the host network and HA does not depend on it.
+wifiScan:
+  enabled: false
+  controlPath: /run/wpa_supplicant
+  # The init container installs one root-only service rule and reloads D-Bus.
+  dbusPolicyPath: /etc/dbus-1/system.d
+  # Empty selects all station interfaces; p2p/global sockets are excluded.
+  interfaces: []
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 96Mi
+
 # Additional volumes on the output Deployment definition.
 volumes: []
 # - name: foo

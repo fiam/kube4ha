@@ -7,6 +7,13 @@ treated as a compatibility migration and tested on a new disposable volume.
 
 ## Verified baseline
 
+The optional `wifiScan` workload reuses the pinned HA image's Python and
+`dbus_fast` library for a scan-only D-Bus API. It is independent of HA's
+startup/readiness and does not require Supervisor, HA Wi-Fi, or an adapter on
+Ethernet-only hosts. When upgrading HA, also test the service imports and its
+`ListNetworks`/`Scan` methods in the proposed image, plus the unavailable-helper
+fallback in consuming integrations. See `DEPLOYMENT.md` for the API contract.
+
 Last verified: **2026-09-04**
 
 | Contract | Verified value |

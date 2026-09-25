@@ -93,6 +93,62 @@ Deployments that previously exposed the bus through manual `volumes` and
 private `config/values.yaml` before upgrading; the chart now fails rendering
 with an explicit message while both are present.
 
+### Optional: list nearby Wi-Fi networks over D-Bus
+
+Home Assistant works on Ethernet and does not require a Wi-Fi adapter. For
+integrations that provision other devices, kube4ha can optionally expose nearby
+networks through a small, separate workload on the Home Assistant node:
+
+```yaml
+homeassistant:
+  wifiScan:
+    enabled: true
+    # Optional: restrict the host's existing station control sockets.
+    interfaces: [wlan0]
+```
+
+This requires the existing `hostDbus` mount and a host-managed wpa_supplicant
+with control sockets under `/run/wpa_supplicant` (override `controlPath` when
+needed). It works with Netplan's per-interface supplicant even when that
+process has no native D-Bus interface. It does not install a network manager,
+start a second supplicant, change credentials, or restart the host connection.
+The scan workload's availability and readiness are independent of HA. On a
+host with no control sockets it returns an empty list; integrations must retain
+manual network entry. Scanning is disabled by default, including on Kind.
+
+The system bus contract is:
+
+- Bus name: `io.github.fiam.Kube4ha.Wifi`
+- Object: `/io/github/fiam/Kube4ha/Wifi`
+- Interface: `io.github.fiam.Kube4ha.Wifi1`
+- `ListNetworks()` reads cached results; `Scan()` requests a scan using
+  `SCAN TYPE=ONLY`, waits up to eight seconds, then reads results. Refreshes
+  are limited to once per 15 seconds; unavailable/slow scans may return cached
+  results. Both return `aa{sv}` with `ssid` (string), `frequency` (MHz, uint32),
+  `signal` (dBm, int16), `security` (supplicant flags) and `interface` (string).
+
+Duplicate SSIDs in each band are reduced to the strongest signal. Names that
+are hidden or cannot be represented as UTF-8 are omitted. The service exposes
+only scan operations, never host Wi-Fi passwords or configuration commands.
+It uses HA's pinned image for Python/dbus-fast, runs as UID 0 to access the
+host socket and bus policy, drops all capabilities, mounts sockets read-only,
+and has no configuration PVC, service-account token, TCP listener or Service.
+Its AppArmor profile is unconfined because containerd's default profile blocks
+system D-Bus authentication; it does not use privileged mode or add capabilities.
+An init container installs the single root-only policy file
+`/etc/dbus-1/system.d/io.github.fiam.Kube4ha.Wifi.conf` and asks D-Bus to reload
+its configuration without restarting it. Override `dbusPolicyPath` for a
+different host policy directory. Existing unmanaged files or symlinks at that
+name are never overwritten. Only the init container can write the policy
+directory; the scan process cannot. The rule permits UID 0 to own and call this
+exact service name, and grants nothing to other users. Install only one scan
+service per host.
+
+Disabling `wifiScan` removes its workload, with no effect on HA or host Wi-Fi.
+The named policy file remains inert without the service. To remove it too,
+delete that one file on the host and call the system bus's `ReloadConfig`
+method; no Wi-Fi restart is needed.
+
 ### Matter devices
 
 The chart runs the Open Home Foundation

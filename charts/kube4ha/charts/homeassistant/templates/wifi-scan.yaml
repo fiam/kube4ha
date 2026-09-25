@@ -1,0 +1,136 @@
+{{- if .Values.wifiScan.enabled }}
+{{- if not .Values.hostDbus.enabled }}
+{{- fail "wifiScan requires hostDbus.enabled=true so integrations can access its optional D-Bus API" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "homeassistant.fullname" . }}-wifi-scan
+data:
+  {{- range $file := list "service.py" "wpa_scan.py" "install_policy.py" "policy.conf" }}
+  {{ $file }}: |
+    {{- $.Files.Get (printf "files/wifi_scan/%s" $file) | nindent 4 }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "homeassistant.fullname" . }}-wifi-scan
+spec:
+  replicas: 1
+  # Only one process may own this D-Bus name on a host at a time.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube4ha-wifi-scan
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube4ha-wifi-scan
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        checksum/service: {{ printf "%s%s%s%s" (.Files.Get "files/wifi_scan/service.py") (.Files.Get "files/wifi_scan/wpa_scan.py") (.Files.Get "files/wifi_scan/install_policy.py") (.Files.Get "files/wifi_scan/policy.conf") | sha256sum }}
+        {{- if not (semverCompare ">=1.30-0" .Capabilities.KubeVersion.Version) }}
+        container.apparmor.security.beta.kubernetes.io/wifi-scan: unconfined
+        container.apparmor.security.beta.kubernetes.io/wifi-scan-policy: unconfined
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      # Abstract AF_UNIX reply sockets must share the supplicant's namespace.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 10
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "homeassistant.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wifi-scan-policy
+          image: "{{ .Values.image.repository | default "homeassistant/home-assistant" }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "/opt/kube4ha-wifi/install_policy.py"]
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            {{- if semverCompare ">=1.30-0" .Capabilities.KubeVersion.Version }}
+            appArmorProfile:
+              type: Unconfined
+            {{- end }}
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: runtime
+              mountPath: /opt/kube4ha-wifi
+              readOnly: true
+            - name: dbus
+              mountPath: /run/dbus
+              readOnly: true
+            - name: dbus-policy
+              mountPath: /host-dbus-policy
+      containers:
+        - name: wifi-scan
+          # Reuse HA's audited image and its bundled dbus-fast dependency.
+          image: "{{ .Values.image.repository | default "homeassistant/home-assistant" }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "/opt/kube4ha-wifi/service.py"]
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: WIFI_INTERFACES
+              value: {{ join " " .Values.wifiScan.interfaces | quote }}
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            # containerd's default AppArmor profile denies system D-Bus Hello.
+            # Keep Linux capabilities dropped; privileged mode is unnecessary.
+            {{- if semverCompare ">=1.30-0" .Capabilities.KubeVersion.Version }}
+            appArmorProfile:
+              type: Unconfined
+            {{- end }}
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.wifiScan.resources | nindent 12 }}
+          volumeMounts:
+            - name: runtime
+              mountPath: /opt/kube4ha-wifi
+              readOnly: true
+            - name: dbus
+              mountPath: /run/dbus
+              readOnly: true
+            - name: wpa
+              mountPath: /run/wpa_supplicant
+              readOnly: true
+      volumes:
+        - name: dbus-policy
+          hostPath:
+            path: {{ .Values.wifiScan.dbusPolicyPath | quote }}
+            type: Directory
+        - name: runtime
+          configMap:
+            name: {{ include "homeassistant.fullname" . }}-wifi-scan
+        - name: dbus
+          hostPath:
+            path: {{ .Values.hostDbus.path | quote }}
+            type: Directory
+        - name: wpa
+          hostPath:
+            path: {{ .Values.wifiScan.controlPath | quote }}
+            # On an Ethernet-only host the service returns an empty list.
+            type: DirectoryOrCreate
+{{- end }}

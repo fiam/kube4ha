@@ -223,6 +223,25 @@ tasks:
             printf '%s\n' "$rendered" | grep -Fq 'path: "/run/dbus"'
           fi
         done
+        # Wi-Fi listing is opt-in and must not alter HA's pod or readiness.
+        ha_default="$(helm template "{{.HELM_RELEASE_NAME}}" . \
+          --show-only charts/homeassistant/templates/deployment.yaml)"
+        ha_with_scan="$(helm template "{{.HELM_RELEASE_NAME}}" . \
+          --set homeassistant.wifiScan.enabled=true \
+          --show-only charts/homeassistant/templates/deployment.yaml)"
+        test "$ha_default" = "$ha_with_scan"
+        wifi_scan="$(helm template "{{.HELM_RELEASE_NAME}}" . \
+          --set homeassistant.wifiScan.enabled=true \
+          --show-only charts/homeassistant/templates/wifi-scan.yaml)"
+        printf '%s\n' "$wifi_scan" | grep -q 'app.kubernetes.io/name: kube4ha-wifi-scan'
+        printf '%s\n' "$wifi_scan" | grep -q 'automountServiceAccountToken: false'
+        printf '%s\n' "$wifi_scan" | grep -q 'type: DirectoryOrCreate'
+        if helm template "{{.HELM_RELEASE_NAME}}" . \
+          --set homeassistant.wifiScan.enabled=true \
+          --set homeassistant.hostDbus.enabled=false >/dev/null 2>&1; then
+          echo 'Wi-Fi scan API requires the existing D-Bus transport' >&2
+          exit 1
+        fi
         production_render="$(helm template "{{.HELM_RELEASE_NAME}}" . \
           --namespace "{{.HELM_NAMESPACE}}" \
           --values ../../examples/values-production.yaml)"

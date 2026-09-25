@@ -60,6 +60,7 @@ tasks:
       - bash scripts/tests/project-rename.sh
       - python3 scripts/tests/matter-restore.py
       - python3 scripts/tests/integration-installers.py
+      - python3 scripts/tests/wifi-scan.py
       - node --test scripts/tests/matter-supervisor.mjs
 
   config:check:

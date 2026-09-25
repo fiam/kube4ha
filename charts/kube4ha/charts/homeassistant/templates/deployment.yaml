@@ -236,6 +236,8 @@ spec:
               set -eu
               target="/config/custom_components/$COMPONENT_NAME"
               staging="/config/custom_components/.${COMPONENT_NAME}.tmp"
+              # emptyDir survives init-container retries and node reboots.
+              rm -rf /work/unpacked
               mkdir -p /work/unpacked /config/custom_components
               wget -q -O /work/component.tar.gz "$COMPONENT_URL"
               echo "$COMPONENT_SHA256  /work/component.tar.gz" | sha256sum -c -
@@ -282,6 +284,8 @@ spec:
               set -eu
               target="/config/custom_components/hacs"
               staging="/config/custom_components/.hacs.tmp"
+              # emptyDir survives init-container retries and node reboots.
+              rm -rf /work/unpacked
               mkdir -p /work/unpacked /config/custom_components
               wget -q -O /work/hacs.zip "$HACS_URL"
               echo "$HACS_SHA256  /work/hacs.zip" | sha256sum -c -

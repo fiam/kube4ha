@@ -135,7 +135,13 @@ The chart installs [HACS](https://hacs.xyz) by default through a dedicated
 init container. Delivery follows the same rules as `customComponents.remote`:
 the `hacs.version` release archive is fetched from GitHub, verified against
 `hacs.sha256`, and staged atomically into `/config/custom_components/hacs` on
-the writable PVC. The default version is maintained in lockstep with the
+the writable PVC. Both archive installers clear their
+extraction scratch directory before each attempt: Kubernetes can rerun init
+containers after a node reboot while retaining their `emptyDir` files. This
+prevents overwrite prompts and stale files from blocking or contaminating a
+retry.
+
+The default version is maintained in lockstep with the
 chart's default Home Assistant image: whenever the Home Assistant version pin
 changes, bump `hacs.version` to the latest HACS release supporting it and
 recompute the digest:

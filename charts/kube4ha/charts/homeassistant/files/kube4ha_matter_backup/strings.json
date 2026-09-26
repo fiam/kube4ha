@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Include Matter in native backups",
-        "description": "Back up the kube4ha Matter Server's device pairings with Home Assistant. Matter briefly reconnects while each snapshot is taken."
+        "description": "Back up the kube4ha Matter Server's device pairings with Home Assistant. When enabled in kube4ha, also keep Matter time synchronization on Home Assistant’s timezone."
       }
     },
     "abort": { "already_configured": "Matter backup is already configured." }

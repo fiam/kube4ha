@@ -1,5 +1,5 @@
 {{- if and .Values.matterServer.enabled (eq .Values.configSeed.mode "seed") }}
-{{- if .Values.matterServer.backup.enabled }}
+{{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
 {{- if not (hasPrefix "/" .Values.matterServer.backup.controlPath) }}
 {{- fail "matterServer.backup.controlPath must be an absolute host path" }}
 {{- end }}
@@ -70,6 +70,10 @@ spec:
           env:
             - name: MATTER_SERVER_IMAGE
               value: "{{ .Values.matterServer.image.repository }}:{{ .Values.matterServer.image.tag }}"
+            - name: MATTER_TIME_SYNC_ENABLED
+              value: {{ .Values.matterServer.timeSync.enabled | quote }}
+            - name: MATTER_CONTROL_ENABLED
+              value: {{ (or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled) | quote }}
             - name: MATTER_BACKUP_ENABLED
               value: {{ .Values.matterServer.backup.enabled | quote }}
             - name: PORT
@@ -82,7 +86,7 @@ spec:
             - name: matter-runtime
               mountPath: /opt/kube4ha-matter
               readOnly: true
-            {{- if .Values.matterServer.backup.enabled }}
+            {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
             - name: matter-control
               mountPath: /run/kube4ha-matter
             {{- end }}
@@ -90,7 +94,7 @@ spec:
         - name: matter-server
           image: "{{ .Values.matterServer.image.repository }}:{{ .Values.matterServer.image.tag }}"
           imagePullPolicy: {{ .Values.matterServer.image.pullPolicy }}
-          {{- if .Values.matterServer.backup.enabled }}
+          {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
           command: ["node", "/opt/kube4ha-matter/supervisor.mjs"]
           {{- end }}
           securityContext:
@@ -101,6 +105,10 @@ spec:
           env:
             - name: MATTER_SERVER_IMAGE
               value: "{{ .Values.matterServer.image.repository }}:{{ .Values.matterServer.image.tag }}"
+            - name: MATTER_TIME_SYNC_ENABLED
+              value: {{ .Values.matterServer.timeSync.enabled | quote }}
+            - name: MATTER_BACKUP_ENABLED
+              value: {{ .Values.matterServer.backup.enabled | quote }}
             - name: STORAGE_PATH
               value: /data/server
             - name: LISTEN_ADDRESS
@@ -114,7 +122,7 @@ spec:
           # With the backup helper, health is reported through the supervisor's
           # control socket so the probe also proves the socket works.
           {{- $healthCommand := list "/usr/local/bin/healthcheck.sh" }}
-          {{- if .Values.matterServer.backup.enabled }}
+          {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
           {{- $healthCommand = list "curl" "--fail" "--silent" "--max-time" "5" "--output" "/dev/null" "--unix-socket" "/run/kube4ha-matter/control.sock" "http://localhost/health" }}
           {{- end }}
           startupProbe:
@@ -144,9 +152,11 @@ spec:
             - name: matter-runtime
               mountPath: /opt/kube4ha-matter
               readOnly: true
-            {{- if .Values.matterServer.backup.enabled }}
+            {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
             - name: matter-control
               mountPath: /run/kube4ha-matter
+            {{- end }}
+            {{- if .Values.matterServer.backup.enabled }}
             - name: config
               mountPath: /backup
               subPath: .kube4ha/matter
@@ -161,7 +171,7 @@ spec:
         - name: config
           persistentVolumeClaim:
             claimName: {{ include "homeassistant.fullname" . }}-pvc
-        {{- if .Values.matterServer.backup.enabled }}
+        {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
         - name: matter-control
           hostPath:
             path: {{ .Values.matterServer.backup.controlPath | quote }}

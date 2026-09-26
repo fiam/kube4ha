@@ -95,6 +95,36 @@ with an explicit message while both are present.
 
 ### Matter devices
 
+Time synchronization is opt-in because the Kubernetes node must have a reliable
+NTP-synchronized clock. After verifying it (for example, `timedatectl show -p
+NTPSynchronized` on the node), enable:
+
+```yaml
+homeassistant:
+  matterServer:
+    timeSync:
+      enabled: true
+```
+
+The bundled Home Assistant helper sends `hass.config.time_zone` to Matter on
+startup, on core configuration changes, and every minute to recover from server
+outages. It uses the private Unix control socket already used for backups; no
+Home Assistant token or additional network listener is needed. Time sync works
+with `backup.enabled: false` as well. The existing `kube4ha_matter_backup` domain
+is retained for compatibility; seed-mode onboarding creates its missing entry.
+For manual onboarding, add the kube4ha Matter Backup integration.
+
+The supervisor saves the validated IANA timezone on the Matter PVC at
+`/data/kube4ha/timezone.json`. Until HA supplies the first timezone, Matter runs
+with time sync disabled. Subsequent controller starts use the saved timezone,
+so HA downtime does not prevent time sync. A different timezone triggers one
+graceful controller restart to apply `TZ`; repeated updates and HA restarts do
+not. Daylight-saving changes are handled by Matter's timezone rules without
+restarting the controller. A changed timezone briefly interrupts device
+connections, and the server's startup delay means device clocks may take a few
+minutes to synchronize. Restore mode keeps the helper inactive.
+
+
 The chart runs the Open Home Foundation
 [`matterjs-server` 1.4.0](https://github.com/matter-js/matterjs-server/releases/tag/v1.4.0)
 beside Home Assistant by default, in its own `<release>-homeassistant-matter`

@@ -384,3 +384,36 @@ requests, failure preserving the previous archive while Matter keeps running,
 transient-file exclusion, and graceful shutdown. Restoring an online snapshot
 into an empty volume has not yet been exercised on the production LAN; record
 that test in the private deployment repository when it happens.
+
+
+## Matter time synchronization (2026-09-26)
+
+Home Assistant remains `2026.9.0` and Matter Server remains `1.4.0`. Time sync
+is opt-in through `matterServer.timeSync.enabled`; operators must verify host
+NTP before enabling it. The existing helper domain now carries the timezone
+bridge independently of its backup hook.
+
+Audited the installed pinned sources: `hass.config.time_zone` contains the
+active IANA zone, `EVENT_CORE_CONFIG_UPDATE` fires after core config updates,
+and `ConfigEntry.async_create_background_task` cancels its tasks on unload and
+shutdown without blocking startup. The helper registers its event listener
+with `entry.async_on_unload`, retries errors, and periodically reconciles the
+current zone so a replaced Matter server is updated without restarting HA.
+These integration APIs are version-coupled and must be rechecked on upgrades.
+
+The pinned Matter CLI defaults `ENABLE_TIME_SYNC` to false and reads `TZ`
+through Node's Intl API for timezone/DST commands. The supervisor validates and
+atomically persists the zone outside fabric storage, applies both variables to
+the child process, and serializes graceful timezone restarts with snapshots.
+It never restarts for an unchanged canonical zone. Until HA supplies an initial
+zone it leaves synchronization disabled. Invalid saved settings are ignored.
+The Matter image's existing time sync manager handles reconnection, timeFailure
+events, daily updates and DST boundaries after its startup window.
+
+Regression coverage includes bridge startup, outage retry, changes arriving
+during a request, cancellation, saved/invalid timezone startup, repeated-update
+idempotence, invalid requests, snapshot/restart exclusion, and independent
+backup/time-sync rendering including disabled and restore modes. `task check`
+and a Helm server dry run passed. All nine supervisor tests also passed in an
+isolated Kubernetes Job using the pinned Matter image and production security
+context. Production verification is recorded in the private deployment repository.

@@ -666,7 +666,7 @@ spec:
             - name: MATTER_ENABLED
               value: {{ .Values.matterServer.enabled | quote }}
             - name: MATTER_BACKUP_ENABLED
-              value: {{ (and .Values.matterServer.enabled .Values.matterServer.backup.enabled) | quote }}
+              value: {{ (and .Values.matterServer.enabled (or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled)) | quote }}
           {{- if .Values.matterServer.enabled }}
             - name: MATTER_SERVER_URL
               value: {{ printf "ws://127.0.0.1:%d/ws" (int .Values.matterServer.port) | quote }}

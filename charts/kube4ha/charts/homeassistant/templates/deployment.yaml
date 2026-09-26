@@ -34,7 +34,7 @@
 {{- fail "customComponents must not declare hacs while hacs.enabled is true" }}
 {{- end }}
 {{- end }}
-{{- if and .Values.matterServer.backup.enabled (hasKey $componentNames "kube4ha_matter_backup") }}
+{{- if and (or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled) (hasKey $componentNames "kube4ha_matter_backup") }}
 {{- fail "kube4ha_matter_backup is reserved for the chart's native Matter backup integration" }}
 {{- end }}
 {{- if .Values.hostDbus.enabled }}
@@ -73,6 +73,9 @@ spec:
         {{- if .Values.hacs.enabled }}
         hacs.revision: {{ toJson .Values.hacs | sha256sum }}
         {{- end }}
+        {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
+        matter-helper.revision: {{ (.Files.Glob "files/kube4ha_matter_backup/*").AsConfig | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}{{- toYaml . | nindent 8 }}{{- end }}
       labels:
         {{- include "homeassistant.labels" . | nindent 8 }}
@@ -93,7 +96,7 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       initContainers:
-        {{- if .Values.matterServer.backup.enabled }}
+        {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
         - name: matter-backup-install
           image: "{{ .Values.configSeed.image.repository }}:{{ .Values.configSeed.image.tag }}"
           imagePullPolicy: {{ .Values.configSeed.image.pullPolicy }}
@@ -339,7 +342,7 @@ spec:
               {{- if .Values.hacs.enabled }}
               hacs
               {{- end }}
-              {{- if .Values.matterServer.backup.enabled }}
+              {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
               kube4ha_matter_backup
               {{- end }}
               EOF
@@ -373,6 +376,8 @@ spec:
           image: "{{ .Values.image.repository | default "homeassistant/home-assistant" }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            - name: KUBE4HA_MATTER_TIME_SYNC_ENABLED
+              value: {{ (and $matterRunning .Values.matterServer.timeSync.enabled) | quote }}
             - name: KUBE4HA_MATTER_BACKUP_ENABLED
               value: {{ (and $matterRunning .Values.matterServer.backup.enabled) | quote }}
           ports:
@@ -394,7 +399,7 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
-            {{- if and $matterRunning .Values.matterServer.backup.enabled }}
+            {{- if and $matterRunning (or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled) }}
             - name: matter-control
               mountPath: /run/kube4ha-matter
             {{- end }}
@@ -407,12 +412,12 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
-        {{- if .Values.matterServer.backup.enabled }}
+        {{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
         - name: matter-backup-integration
           configMap:
             name: {{ include "homeassistant.fullname" . }}-matter-backup-integration
         {{- end }}
-        {{- if and $matterRunning .Values.matterServer.backup.enabled }}
+        {{- if and $matterRunning (or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled) }}
         # Shared with the Matter pod on the same node; the HA container talks
         # to the supervisor's Unix socket here before each native backup.
         - name: matter-control

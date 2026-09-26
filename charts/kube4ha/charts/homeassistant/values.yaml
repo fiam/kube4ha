@@ -93,6 +93,10 @@ matterServer:
   # Empty lets Matter choose the interface; set the physical LAN interface on
   # hosts with multiple interfaces (for example enp1s0, not cni0 or flannel.1).
   primaryInterface: ""
+  timeSync:
+    # Opt in only when the Kubernetes host clock is reliably NTP synchronized.
+    # The bundled HA helper supplies and tracks hass.config.time_zone.
+    enabled: false
   backup:
     # Bundle the kube4ha_matter_backup integration and stage a fresh snapshot
     # before every native HA backup. The live storage tree is copied without

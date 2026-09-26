@@ -3,7 +3,7 @@
 // directory shared only with the HA pod; no network API is added.
 import { spawn, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmod, copyFile, mkdir, mkdtemp, open, readdir, lstat, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, open, readFile, readdir, lstat, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
@@ -82,15 +82,20 @@ export async function archiveState({ storage, backup, image }) {
 
 // ws allows 30 seconds for peers to acknowledge a close frame. Give that
 // handshake time to finish before waiting for Matter's storage flush.
-export function supervise({ command, storage, backup, socket, image, port, stopTimeout = 60000, fatal = () => process.exit(1) }) {
+export function supervise({ command, storage, backup, socket, image, port, timeSync = false, backupEnabled = true, stopTimeout = 60000, fatal = () => process.exit(1) }) {
   let child;
   let snapshot;
+  let timezoneUpdate;
+  let timezone;
+  const timezoneFile = join(storage, "kube4ha", "timezone.json");
   let closing = false;
   const expectedExits = new WeakSet();
 
   function start() {
     if (closing) return;
-    child = spawn(command[0], command.slice(1), { stdio: 'inherit' });
+    child = spawn(command[0], command.slice(1), { stdio: 'inherit', env: { ...process.env,
+      ...(timeSync ? { ENABLE_TIME_SYNC: timezone ? 'true' : 'false', TZ: timezone || 'UTC' } : {}),
+    } });
     const started = child;
     started.on('error', () => { console.error('Matter process failed to start'); fatal(); });
     started.on('exit', () => {
@@ -120,6 +125,25 @@ export function supervise({ command, storage, backup, socket, image, port, stopT
     if (exit.code !== 0 || exit.signal) throw new Error('Matter did not stop cleanly');
   }
 
+  function validateTimezone(value) {
+    if (typeof value !== 'string' || !value || value.length > 128) throw new Error('Invalid timezone');
+    return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone;
+  }
+
+  async function changeTimezone(value) {
+    await mkdir(join(storage, 'kube4ha'), { recursive: true, mode: 0o700 });
+    const file = await open(`${timezoneFile}.tmp`, 'w', 0o600);
+    try { await file.writeFile(JSON.stringify({ timezone: value })); await file.sync(); }
+    finally { await file.close(); }
+    await rename(`${timezoneFile}.tmp`, timezoneFile);
+    // Stop must finish before a replacement may acquire the fabric lock.
+    try { await stop(); }
+    catch (error) { fatal(); throw error; }
+    timezone = value;
+    start();
+    console.log(`Matter timezone set to ${timezone}; time synchronization enabled`);
+  }
+
   async function healthy() {
     if (!child || child.exitCode !== null || child.signalCode !== null) return false;
     try {
@@ -135,11 +159,32 @@ export function supervise({ command, storage, backup, socket, image, port, stopT
       response.end(JSON.stringify(body));
     };
     if (request.method === 'GET' && request.url === '/health') {
-      reply(!closing && await healthy() ? 200 : 503, {});
+      // A deliberate graceful restart can spend 30s closing WebSockets.
+      // Do not let liveness interrupt it before the bounded stop completes.
+      reply(!closing && (timezoneUpdate || await healthy()) ? 200 : 503, {});
       return;
     }
+    if (timeSync && request.method === 'POST' && request.url === '/timezone') {
+      let value;
+      try {
+        let body = '';
+        for await (const chunk of request) {
+          body += chunk;
+          if (body.length > 1024) throw new Error('Request too large');
+        }
+        value = validateTimezone(JSON.parse(body).timezone);
+      } catch { reply(400, { error: 'Invalid timezone' }); return; }
+      if (closing || snapshot || timezoneUpdate) { reply(409, { error: 'Matter operation in progress' }); return; }
+      if (value === timezone) { reply(200, { timezone }); return; }
+      timezoneUpdate = changeTimezone(value);
+      try { await timezoneUpdate; reply(200, { timezone }); }
+      catch { reply(500, { error: 'Could not apply Matter timezone' }); }
+      finally { timezoneUpdate = undefined; }
+      return;
+    }
+    if (!backupEnabled) { reply(404, {}); return; }
     if (request.method !== 'POST' || request.url !== '/snapshot') { reply(404, {}); return; }
-    if (closing || snapshot) { reply(409, { error: 'Matter snapshot already in progress' }); return; }
+    if (closing || snapshot || timezoneUpdate) { reply(409, { error: 'Matter snapshot already in progress' }); return; }
     // Claim the operation before any await so concurrent requests are
     // rejected. Continue even if the HTTP client disconnects.
     snapshot = (async () => {
@@ -157,6 +202,13 @@ export function supervise({ command, storage, backup, socket, image, port, stopT
   });
 
   async function listen() {
+    if (timeSync) {
+      try { timezone = validateTimezone(JSON.parse(await readFile(timezoneFile, 'utf8')).timezone); }
+      catch (error) {
+        if (error.code !== 'ENOENT') console.warn('Ignoring invalid saved Matter timezone; waiting for Home Assistant');
+      }
+      if (!timezone) console.log('Waiting for Home Assistant timezone before enabling time synchronization');
+    }
     await rm(socket, { force: true });
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socket, resolve); });
     await chmod(socket, 0o600);
@@ -166,6 +218,7 @@ export function supervise({ command, storage, backup, socket, image, port, stopT
   async function close() {
     closing = true;
     server.close();
+    if (timezoneUpdate) await timezoneUpdate.catch(() => {});
     if (snapshot) await snapshot.catch(() => {});
     if (child) await stop().catch(() => {});
     await rm(socket, { force: true });
@@ -181,6 +234,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
     command: ['node', '--enable-source-maps', '/app/node_modules/matter-server/dist/esm/MatterServer.js'],
     storage: '/data', backup: '/backup', socket: '/run/kube4ha-matter/control.sock',
     image: process.env.MATTER_SERVER_IMAGE, port: process.env.PORT || '5580',
+    timeSync: process.env.MATTER_TIME_SYNC_ENABLED === 'true',
+    backupEnabled: process.env.MATTER_BACKUP_ENABLED !== 'false',
   });
   for (const signal of ['SIGTERM', 'SIGINT']) {
     process.once(signal, async () => { await controller.close(); process.exit(0); });

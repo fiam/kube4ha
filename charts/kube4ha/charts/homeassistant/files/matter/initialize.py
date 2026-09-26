@@ -82,9 +82,15 @@ def main():
         backup.mkdir(parents=True, exist_ok=True)
         backup.chmod(0o700)
         os.chown(backup, 1000, 1000)
+    if os.environ.get("MATTER_CONTROL_ENABLED", os.environ.get("MATTER_BACKUP_ENABLED")) == "true":
         control = Path("/run/kube4ha-matter")
         control.chmod(0o700)
         os.chown(control, 1000, 1000)
+    if os.environ.get("MATTER_TIME_SYNC_ENABLED") == "true":
+        settings = storage / "kube4ha"
+        settings.mkdir(exist_ok=True)
+        settings.chmod(0o700)
+        os.chown(settings, 1000, 1000)
     target = storage / "server"
     target.mkdir(exist_ok=True)
     target.chmod(0o700)

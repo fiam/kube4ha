@@ -10,7 +10,7 @@ data:
   {{- end }}
 ---
 {{- end }}
-{{- if .Values.matterServer.backup.enabled }}
+{{- if or .Values.matterServer.backup.enabled .Values.matterServer.timeSync.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

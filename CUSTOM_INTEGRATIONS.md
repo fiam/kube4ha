@@ -7,8 +7,11 @@ Its Python source is packaged in the chart and copied from a ConfigMap to the
 writable configuration PVC, never mounted read-only below `/config`. The
 onboarding hook creates its credential-free config entry in seed mode.
 
-`homeassistant.matterServer.backup.enabled: false` opts out of that integration;
-remove its config entry in Home Assistant before disabling it. The reconciler
+`homeassistant.matterServer.timeSync.enabled: true` also uses this helper to
+keep Matter on Home Assistant's timezone through the same private Unix socket.
+It works independently of backups. Disable both `backup.enabled` and
+`timeSync.enabled` to opt out of the integration; remove its config entry in
+Home Assistant before disabling both. The reconciler
 tracks and removes only its managed directory. Its domain is reserved while
 the feature is enabled. When Matter itself is disabled or restore mode is
 active, the installed backup helper is inactive. See

@@ -163,6 +163,23 @@ tasks:
           exit 1
         fi
       - |
+        time_only="$(helm template matter-time-test charts/homeassistant --set matterServer.timeSync.enabled=true --set matterServer.backup.enabled=false)"
+        printf '%s\n' "$time_only" | grep -Fq 'name: matter-backup-install'
+        printf '%s\n' "$time_only" | grep -Fq 'name: matter-control'
+        printf '%s\n' "$time_only" | grep -Fq 'command: ["node", "/opt/kube4ha-matter/supervisor.mjs"]'
+        printf '%s\n' "$time_only" | grep -Fq 'name: KUBE4HA_MATTER_TIME_SYNC_ENABLED'
+        if printf '%s\n' "$time_only" | grep -Fq 'mountPath: /backup'; then
+          echo 'time sync without backups must not require the backup subdirectory' >&2
+          exit 1
+        fi
+        for setting in matterServer.enabled=false configSeed.mode=restore; do
+          inactive="$(helm template matter-time-test charts/homeassistant --set matterServer.timeSync.enabled=true --set "$setting")"
+          if printf '%s\n' "$inactive" | grep -Eq 'name: matter-control|component: matter-server'; then
+            echo 'disabled/restore mode must keep time sync inactive' >&2
+            exit 1
+          fi
+        done
+      - |
         helm template "{{.HELM_RELEASE_NAME}}" . \
           --namespace "{{.HELM_NAMESPACE}}" \
           --kube-version 1.23.0 \

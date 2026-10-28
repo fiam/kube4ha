@@ -7,16 +7,16 @@ treated as a compatibility migration and tested on a new disposable volume.
 
 ## Verified baseline
 
-Last verified: **2026-10-28**. The October scope and exclusions are recorded
-below; historical Cloudflare and Zigbee validation is not a fresh October test.
+Last verified: **2026-10-28**. The Home Assistant and supporting-service
+upgrade scopes and exclusions are recorded separately below.
 
 | Contract | Verified value |
 | --- | --- |
 | Home Assistant Core image | `2026.10.4` |
 | HACS | `2.0.5` (latest release checked; checksum unchanged) |
-| Matter Server / Python client | `1.4.0` / `1.4.0` |
-| cloudflared image | `2026.8.3` |
-| Zigbee2MQTT image | `2.14.1` |
+| Matter Server / Python client | `1.5.5` / `1.4.0` |
+| cloudflared image | `2026.10.5` |
+| Zigbee2MQTT image | `2.14.2` |
 | Resulting HTTP storage | `.storage/http`, store `2.2` |
 | Resulting core configuration storage | `.storage/core.config`, store `1.4` |
 | Resulting config-entry storage | `.storage/core.config_entries`, store `1.5` |
@@ -115,7 +115,7 @@ code, constants, schemas, migrations, and tests—not just release notes.
 - [Matter client requirements](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/matter/manifest.json)
 - [Matter integration setup](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/matter/__init__.py)
 - [Documented pre/post-backup platform](https://developers.home-assistant.io/docs/core/platform/backup/)
-- [Matter Server 1.4.0 CLI and container contract](https://github.com/matter-js/matterjs-server/blob/v1.4.0/docs/docker.md)
+- [Matter Server 1.5.5 CLI and container contract](https://github.com/matter-js/matterjs-server/blob/v1.5.5/docs/docker.md)
 - [Cloudflare R2 config flow](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/cloudflare_r2/config_flow.py)
 - [Backup WebSocket command schemas](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/websocket.py)
 - [Automatic schedule and retention model](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/config.py)
@@ -500,3 +500,61 @@ backup/time-sync rendering including disabled and restore modes. `task check`
 and a Helm server dry run passed. All nine supervisor tests also passed in an
 isolated Kubernetes Job using the pinned Matter image and production security
 context. Production verification is recorded in the private deployment repository.
+
+
+## Supporting-service upgrade (2026-10-28)
+
+Home Assistant stays at `2026.10.4` with `matter-python-client==1.4.0`.
+The selected service images are Matter Server `1.5.5`, Zigbee2MQTT `2.14.2`,
+and cloudflared `2026.10.5`. Mosquitto, HACS, and Kubernetes are unchanged.
+
+Source review at the exact tags confirmed:
+
+- Matter Server advertises WebSocket schema 14 with minimum schema 11, which
+  accepts the existing HA client. The CLI entrypoint, UID/GID 1000, health
+  endpoint, loopback binding, storage path and time-sync environment variables
+  used by the chart remain supported.
+- The seven `Wal*.ts` storage files in `@matter/general` are byte-identical
+  between the old image's 0.17.9 and the new image's 0.18.0. The live-copy
+  snapshot assumptions above therefore still apply. The initializer continues
+  to require an exact snapshot image match when recovering an empty volume;
+  create a new native backup after the upgrade. Recover an old snapshot using
+  its original server image, then upgrade the recovered storage.
+- Zigbee2MQTT's backup request and ZIP response are unchanged. Its configuration
+  migration changes are coverage annotations only; no new configuration
+  migration is introduced by this patch.
+- cloudflared retains the named-tunnel token environment variable, command-line
+  flags and `/ready` endpoint used by the chart. The release range includes
+  transport fixes and security dependency updates. Tunnel routing is checked
+  independently of Home Assistant's Cloudflare R2 backup integration.
+
+Validation used a fresh, dedicated Colima/Kind cluster and disposable volumes:
+
+- `task check` passed with Python 3.14 and Node 22. All nine supervisor tests
+  also passed inside the exact Matter Server 1.5.5 image as UID/GID 1000.
+- HA 2026.10.4 was seeded with Matter 1.4.0, then upgraded to 1.5.5. MQTT,
+  Matter and the backup helper loaded. Fabric identity and config-entry IDs
+  survived the upgrade, repeated onboarding hook, controller replacement and
+  empty-volume Matter recovery from the new native backup. Timezone
+  synchronization remained enabled through the existing helper.
+- Zigbee2MQTT 2.14.2 started with the repository's Z-Stack emulator. The actual
+  snapshot CronJob produced a valid ZIP containing coordinator state and the
+  device database. Restoring it into an empty Zigbee PVC and restarting the
+  service succeeded. A native HA backup included both recovery archives.
+- cloudflared 2026.10.5 served the isolated HA instance through a temporary
+  Quick Tunnel. Fresh owner login and authenticated HTTP/WebSocket operations
+  succeeded. This does not exercise named-tunnel token authentication; that
+  and the existing public route are verified during production rollout.
+- Three server-side production dry runs isolated the changed pod templates:
+  Zigbee2MQTT first; HA and Matter second (the HA chart version label also
+  restarts HA); cloudflared last. Mosquitto's pod template stayed unchanged.
+
+No new physical Matter commissioning or Zigbee coordinator firmware update
+was performed. The emulator does not verify physical Zigbee radio traffic;
+existing device reconnection and availability require the production checks.
+Cloudflare R2 infrastructure and credentials are unchanged; no OpenTofu apply
+or new R2 bucket test is part of this service-image update.
+
+Sources: [Matter 1.5.5 changelog](https://github.com/matter-js/matterjs-server/blob/v1.5.5/CHANGELOG.md),
+[Zigbee2MQTT 2.14.2](https://github.com/Koenkk/zigbee2mqtt/releases/tag/2.14.2),
+[cloudflared changes](https://github.com/cloudflare/cloudflared/compare/2026.8.3...2026.10.5).

@@ -9,7 +9,7 @@ image:
   repository: cloudflare/cloudflared
   pullPolicy: IfNotPresent
   # Pin exact releases so node replacement cannot introduce an untested build.
-  tag: "2026.8.3"
+  tag: "2026.10.5"
 
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:

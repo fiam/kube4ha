@@ -75,7 +75,7 @@ tasks:
         matter_render="$(helm template matter-test charts/homeassistant \
           --set onboarding.enabled=true \
           --set onboarding.existingSecret.name=test-owner)"
-        printf '%s\n' "$matter_render" | grep -Fq 'image: "ghcr.io/matter-js/matterjs-server:1.4.0"'
+        printf '%s\n' "$matter_render" | grep -Fq 'image: "ghcr.io/matter-js/matterjs-server:1.5.5"'
         printf '%s\n' "$matter_render" | grep -Fq 'name: matter-server'
         printf '%s\n' "$matter_render" | grep -Fq 'value: "127.0.0.1"'
         printf '%s\n' "$matter_render" | grep -Fq 'value: "ws://127.0.0.1:5580/ws"'

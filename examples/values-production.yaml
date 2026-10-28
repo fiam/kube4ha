@@ -9,7 +9,7 @@ zigbee2mqtt:
   # local HTTPRoute hostname in infra/helm-values.yaml.
 
   image:
-    tag: "2.14.1"  # Pin this and test upgrades with your coordinator
+    tag: "2.14.2"  # Pin this and test upgrades with your coordinator
 
   config:
     serial:

@@ -18,7 +18,7 @@ kubeVersion: ">=1.23.0-0"
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.16.0
+version: 0.16.1
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
@@ -28,15 +28,15 @@ appVersion: "2026.10.4"
 
 dependencies:
   - name: homeassistant
-    version: 0.15.0
+    version: 0.15.1
     repository: file://charts/homeassistant
   - name: zigbee2mqtt
-    version: 0.1.4
+    version: 0.1.5
     repository: file://charts/zigbee2mqtt
     condition: zigbee2mqtt.enabled
   - name: mosquitto
     version: 0.1.0
     repository: file://charts/mosquitto
   - name: cloudflared
-    version: 0.1.1
+    version: 0.1.2
     repository: file://charts/cloudflared

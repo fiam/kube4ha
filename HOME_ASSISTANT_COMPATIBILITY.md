@@ -7,20 +7,23 @@ treated as a compatibility migration and tested on a new disposable volume.
 
 ## Verified baseline
 
-Last verified: **2026-09-04**
+Last verified: **2026-10-28**. The October scope and exclusions are recorded
+below; historical Cloudflare and Zigbee validation is not a fresh October test.
 
 | Contract | Verified value |
 | --- | --- |
-| Home Assistant Core image | `2026.9.0` |
+| Home Assistant Core image | `2026.10.4` |
+| HACS | `2.0.5` (latest release checked; checksum unchanged) |
+| Matter Server / Python client | `1.4.0` / `1.4.0` |
 | cloudflared image | `2026.8.3` |
 | Zigbee2MQTT image | `2.14.1` |
 | Resulting HTTP storage | `.storage/http`, store `2.2` |
 | Resulting core configuration storage | `.storage/core.config`, store `1.4` |
 | Resulting config-entry storage | `.storage/core.config_entries`, store `1.5` |
 | MQTT config flow result | entry `2.1`, protocol `5`, transport `tcp` |
-| Cloudflare R2 config flow result | entry `1.1` |
-| Resulting backup storage | `.storage/backup`, store `1.7` |
-| Seeded automatic backup | daily, R2 only, seven copies; protection follows the optional password |
+| Cloudflare R2 config flow result | entry `1.1` (September baseline; October form/source audit only) |
+| Resulting backup storage | `.storage/backup`, store `1.7` (September baseline) |
+| Seeded automatic backup | September baseline: daily, R2 only, seven copies; protection follows the optional password |
 | Core settings command | `config/core/update` |
 | Reconciled core settings | location name, external URL, internal URL |
 | Config-entry lookup command | `config_entries/get` |
@@ -93,35 +96,35 @@ changing their delivery contract.
 
 ## Sources to inspect for every upgrade
 
-Replace `2026.9.0` in these links with the proposed exact tag and compare the
+Replace `2026.10.4` in these links with the proposed exact tag and compare the
 code, constants, schemas, migrations, and tests—not just release notes.
 
-- [Onboarding views and payloads](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/onboarding/views.py)
-- [Login-flow HTTP views](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/auth/login_flow.py)
+- [Onboarding views and payloads](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/onboarding/views.py)
+- [Login-flow HTTP views](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/auth/login_flow.py)
 - [Documented token and revocation API](https://developers.home-assistant.io/docs/auth_api/)
-- [Core-settings WebSocket command](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/config/core.py)
-- [Config-entry flow HTTP views and lookup command](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/config/config_entries.py)
-- [HTTP user-configuration WebSocket commands](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/http/websocket_api.py)
-- [HTTP storage schema](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/http/config.py)
-- [Config-entry storage and migrations](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/config_entries.py)
-- [MQTT config flow](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/mqtt/config_flow.py)
-- [MQTT config-flow tests](https://github.com/home-assistant/core/blob/2026.9.0/tests/components/mqtt/test_config_flow.py)
-- [MQTT constants](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/mqtt/const.py)
-- [Matter config flow](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/matter/config_flow.py)
-- [Matter config-flow tests](https://github.com/home-assistant/core/blob/2026.9.0/tests/components/matter/test_config_flow.py)
-- [Matter client requirements](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/matter/manifest.json)
-- [Matter integration setup](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/matter/__init__.py)
+- [Core-settings WebSocket command](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/config/core.py)
+- [Config-entry flow HTTP views and lookup command](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/config/config_entries.py)
+- [HTTP user-configuration WebSocket commands](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/http/websocket_api.py)
+- [HTTP storage schema](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/http/config.py)
+- [Config-entry storage and migrations](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/config_entries.py)
+- [MQTT config flow](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/mqtt/config_flow.py)
+- [MQTT config-flow tests](https://github.com/home-assistant/core/blob/2026.10.4/tests/components/mqtt/test_config_flow.py)
+- [MQTT constants](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/mqtt/const.py)
+- [Matter config flow](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/matter/config_flow.py)
+- [Matter config-flow tests](https://github.com/home-assistant/core/blob/2026.10.4/tests/components/matter/test_config_flow.py)
+- [Matter client requirements](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/matter/manifest.json)
+- [Matter integration setup](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/matter/__init__.py)
 - [Documented pre/post-backup platform](https://developers.home-assistant.io/docs/core/platform/backup/)
 - [Matter Server 1.4.0 CLI and container contract](https://github.com/matter-js/matterjs-server/blob/v1.4.0/docs/docker.md)
-- [Cloudflare R2 config flow](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/cloudflare_r2/config_flow.py)
-- [Backup WebSocket command schemas](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/backup/websocket.py)
-- [Automatic schedule and retention model](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/backup/config.py)
-- [Backup agent ID contract](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/backup/agent.py)
-- [Cloudflare R2 backup agent](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/cloudflare_r2/backup.py)
-- [Native onboarding backup views](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/backup/onboarding.py)
-- [Startup-time backup restoration](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/backup_restore.py)
+- [Cloudflare R2 config flow](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/cloudflare_r2/config_flow.py)
+- [Backup WebSocket command schemas](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/websocket.py)
+- [Automatic schedule and retention model](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/config.py)
+- [Backup agent ID contract](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/agent.py)
+- [Cloudflare R2 backup agent](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/cloudflare_r2/backup.py)
+- [Native onboarding backup views](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/onboarding.py)
+- [Startup-time backup restoration](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/backup_restore.py)
 - [Native backup documentation](https://www.home-assistant.io/integrations/backup/)
-- [Core backup archive construction and exclusions](https://github.com/home-assistant/core/blob/2026.9.0/homeassistant/components/backup/manager.py)
+- [Core backup archive construction and exclusions](https://github.com/home-assistant/core/blob/2026.10.4/homeassistant/components/backup/manager.py)
 - [Zigbee2MQTT backup request](https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html#zigbee2mqttbridgerequestbackup)
 
 Inspect the tests beside these source files as well. They often document
@@ -188,7 +191,87 @@ Do not test an upgrade first against the production PVC. Preserve a native
 Home Assistant backup, encrypted OpenTofu state, and the Zigbee network
 identity before changing production.
 
-## Baseline observations
+## October 2026 upgrade audit
+
+The exact `2026.10.4` image was audited against `2026.9.0`. Onboarding,
+login/token revocation, core settings, config-entry lookup, MQTT, HTTP trial and
+promotion, backup commands, R2, and native restore source and adjacent tests
+were compared at both tags. The hook's payloads remain accepted. Schema
+validation moved from Voluptuous to Probatio; the image retains its
+Voluptuous compatibility shim. Login adds optional PKCE without requiring it
+for the existing login exchange. The R2 endpoint default changed, while the
+explicit endpoint and credential fields used by the hook remain supported.
+The Matter client remains `1.4.0`, and the manual flow and helper APIs remain
+compatible.
+
+A fresh disposable Kind cluster with fresh PVCs exercised:
+
+- Automated owner creation, real login and token revocation, editable core URLs,
+  MQTT setup, and HTTP trial/promotion with no pending configuration left over.
+- Exactly one loaded MQTT, Matter, and `kube4ha_matter_backup` entry, followed by
+  HA restart and repeated reconciliation without duplicate entries.
+- HTTP storage `2.2`, core settings storage `1.4`, and config-entry storage
+  `1.5`; no chart-managed `homeassistant:` YAML block.
+- HACS `2.0.5` installation and its initial user flow. A real GitHub account
+  was not connected in the disposable instance.
+- A native local backup, upload through blank-instance onboarding, recovery
+  into a fresh HA PVC, return to seed mode, and another HA restart. The separate
+  empty Matter PVC recovered its native snapshot; MQTT, Matter and the backup
+  helper returned to `loaded`.
+- An in-place `2026.9.0` to `2026.10.4` upgrade on a separate synthetic PVC.
+  MQTT and an external Matter entry retained their IDs and returned to `loaded`;
+  the chart's Matter controller was disabled for this release. Core URLs and
+  the promoted HTTP settings also survived.
+
+The first Matter startup included an initialization restart and one shutdown
+that exceeded its grace period. The restored instance reached ready with no
+container restarts. These checks establish the API and empty-fabric restore
+contract, not physical Thread commissioning or radio reliability.
+
+`task check` passed with Python 3.14 and Node 22, including the chart, installation, Matter backup/restore,
+and supervisor tests. A test-only startup race was corrected: the synthetic
+Matter child records its start before listening, so the post-restart snapshot
+assertion now waits for actual health. The custom-integration checks used exact HA 2026.10.4
+containers: Domus40 `0.11.0` (99 tests), Midea Connect `2026.9.1` (348 tests),
+and Jablotron Cloud `0.1.0` (79 tests). Initial config flows also opened for
+these integrations, iAquaLink Robots `3.0.0`, HACS, and Cloudflare R2. Live
+vendor accounts and physical controls were not exercised.
+
+### Comelit compatibility blocker
+
+Comelit Cloud `0.7.1`/`0.7.2` require released `aiortc==1.15.0`, which requires
+PyAV below 18; HA 2026.10.4 constrains PyAV to `19.0.0`. Its real config flow
+fails dependency installation. An unconstrained unit-test image can hide this
+by downgrading PyAV, so compatibility checks must enforce HA's
+`package_constraints.txt`.
+
+Upstream aiortc has merged [PyAV 19 support](https://github.com/aiortc/aiortc/pull/1447)
+but had not released it at audit time. An immutable commit/checksum experiment
+passed 157 tests on each of HA 2026.9.0 and 2026.10.4 and opened the real config
+flow while retaining PyAV 19. That experiment is a
+[draft Comelit PR](https://github.com/fiam/home-assistant-comelit-cloud/pull/1),
+not the production upgrade path. Deployments using the released Comelit
+integration should remain on HA 2026.9.0 until an official compatible aiortc
+release and updated Comelit dependency are validated. The optional integration
+is not installed by kube4ha's defaults.
+
+### Scope and rollout limits
+
+Isolated Cloudflare R2 bucket, encrypted-state bootstrap, tunnel, and R2
+backup/restore tests were explicitly waived for this upgrade. Their source
+contracts were reviewed; the earlier results below remain historical evidence.
+Local authenticated HTTP/WebSocket and native local backup/restore were tested.
+No new physical Matter commissioning or empty-volume Zigbee2MQTT recovery was
+performed. Neither cloudflared, Zigbee2MQTT, HACS nor Matter Server was bumped.
+
+A render comparison found that an HA version/chart bump changes the Matter
+pod's chart labels and HA-based initialization image. Despite separate
+Deployments, this upgrade therefore rolls the Matter controller too. Preserve
+its native snapshot and allow paired devices time to reconnect; a separate
+Deployment alone does not guarantee an unchanged Matter pod on chart upgrades.
+Production deployments with the Comelit blocker remain deferred.
+
+## September baseline observations
 
 The `2026.9.0` baseline was exercised with a fresh Kind cluster and PVC,
 automated owner creation, real login and token revocation, MQTT and Cloudflare

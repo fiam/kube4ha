@@ -183,7 +183,7 @@ image:
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   # Pin exact patches: see HOME_ASSISTANT_COMPATIBILITY.md before changing.
-  tag: "2026.9.0"
+  tag: "2026.10.4"
 
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []

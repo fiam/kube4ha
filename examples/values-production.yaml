@@ -43,7 +43,7 @@ homeassistant:
   # OpenTofu supplies external/internal URLs, MQTT, R2, and the local
   # HTTPRoute hostname in infra/helm-values.yaml.
   image:
-    tag: "2026.9.0"  # Pin this and test upgrades before production use
+    tag: "2026.10.4"  # Pin this and test upgrades before production use
   
   config:
     # Reconciled through the Home Assistant API on each seed-mode deployment.

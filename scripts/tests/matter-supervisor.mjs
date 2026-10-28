@@ -21,6 +21,11 @@ function list(archive) {
   return execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n').sort();
 }
 
+async function waitHealthy(socket) {
+  for (let attempt = 0; attempt < 100 && await call(socket, 'GET', '/health') !== 200; attempt++) await delay(25);
+  assert.equal(await call(socket, 'GET', '/health'), 200);
+}
+
 async function fixture(t, { stopTimeout = 2000, timeSync = false, backupEnabled = true, savedTimezone } = {}) {
   const root = await mkdtemp('/tmp/kube4ha-matter-test-');
   const storage = join(root, 'data');
@@ -55,8 +60,7 @@ async function fixture(t, { stopTimeout = 2000, timeSync = false, backupEnabled 
   const supervisor = supervise({ command: [process.execPath, '-e', code], storage, backup, socket, image: 'fixture:1.0.0', port, stopTimeout, timeSync, backupEnabled, fatal: () => assert.fail('Unexpected process failure') });
   await supervisor.listen();
   t.after(async () => { await supervisor.close(); await rm(root, { recursive: true, force: true }); });
-  for (let attempt = 0; attempt < 100 && await call(socket, 'GET', '/health') !== 200; attempt++) await delay(25);
-  assert.equal(await call(socket, 'GET', '/health'), 200);
+  await waitHealthy(socket);
   return { root, storage, server, backup, socket, signals, supervisor };
 }
 
@@ -180,5 +184,7 @@ test('timezone restarts serialize with snapshots and remain healthy during grace
   assert.equal(await call(socket, 'POST', '/timezone', { timezone: 'Asia/Tokyo' }), 409);
   assert.equal(await changing, 200);
   await waitStarts(root, 2);
+  // The child writes its start record before its HTTP listener is ready.
+  await waitHealthy(socket);
   assert.equal(await call(socket, 'POST', '/snapshot'), 200);
 });

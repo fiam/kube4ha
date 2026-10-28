@@ -246,14 +246,14 @@ by downgrading PyAV, so compatibility checks must enforce HA's
 `package_constraints.txt`.
 
 Upstream aiortc has merged [PyAV 19 support](https://github.com/aiortc/aiortc/pull/1447)
-but had not released it at audit time. An immutable commit/checksum experiment
-passed 157 tests on each of HA 2026.9.0 and 2026.10.4 and opened the real config
-flow while retaining PyAV 19. That experiment is a
-[draft Comelit PR](https://github.com/fiam/home-assistant-comelit-cloud/pull/1),
-not the production upgrade path. Deployments using the released Comelit
-integration should remain on HA 2026.9.0 until an official compatible aiortc
-release and updated Comelit dependency are validated. The optional integration
-is not installed by kube4ha's defaults.
+but had not released it at audit time. Comelit `0.7.3` temporarily pins upstream
+commit `10ccd168528d93996d013d0ecfae679c3a764b68` and its archive SHA-256
+`57a636dda0ff21397b1c4a5b3c796dda26c22c7e1c43598bf9e769aa3324f62c`.
+This passed 157 tests on each of HA 2026.9.0 and 2026.10.4 and opened the real
+config flow while retaining PyAV 19. Replace the temporary source pin after
+validating a compatible official aiortc release. Deployments still using
+Comelit `0.7.1`/`0.7.2` must update that dependency before upgrading HA.
+The optional integration is not installed by kube4ha's defaults.
 
 ### Scope and rollout limits
 
@@ -269,7 +269,7 @@ pod's chart labels and HA-based initialization image. Despite separate
 Deployments, this upgrade therefore rolls the Matter controller too. Preserve
 its native snapshot and allow paired devices time to reconnect; a separate
 Deployment alone does not guarantee an unchanged Matter pod on chart upgrades.
-Production deployments with the Comelit blocker remain deferred.
+The released aiortc dependency remains incompatible until replaced as described above.
 
 ## September baseline observations
 

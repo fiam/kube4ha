@@ -1,7 +1,7 @@
 # kube4ha — Kubernetes for Home Assistant
 
 [![Kubernetes v1.23+](https://img.shields.io/badge/Kubernetes-v1.23%2B-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://kubernetes.io/releases/)
-[![Home Assistant 2026.9.0](https://img.shields.io/badge/Home%20Assistant-2026.9.0-18BCF2?style=flat-square&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
+[![Home Assistant 2026.10.4](https://img.shields.io/badge/Home%20Assistant-2026.10.4-18BCF2?style=flat-square&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![OpenTofu v1.12+](https://img.shields.io/badge/OpenTofu-v1.12%2B-FFDA18?style=flat-square&logo=opentofu&logoColor=black)](https://opentofu.org/)
 [![Helm 3](https://img.shields.io/badge/Helm-3-0F1689?style=flat-square&logo=helm&logoColor=white)](https://helm.sh/)
 
